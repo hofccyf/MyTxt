@@ -104,9 +104,8 @@ async function setShareCache(env, token, path, content, oldToken) {
     JSON.stringify({ token, content }),
     opts,
   );
-  if (oldToken && oldToken !== token) {
+  if (oldToken && oldToken !== token)
     await env.SHARE_KV.delete(await getKVKey(oldToken, path));
-  }
 }
 async function updateShareCache(env, token, path, content) {
   if (!env.SHARE_KV || !token) return;
@@ -117,9 +116,8 @@ async function updateShareCache(env, token, path, content) {
   );
 }
 async function deleteShareCache(env, token, path) {
-  if (env.SHARE_KV && token) {
+  if (env.SHARE_KV && token)
     await env.SHARE_KV.delete(await getKVKey(token, path));
-  }
 }
 async function getShareCache(env, token, path) {
   if (!env.SHARE_KV) return null;
@@ -189,9 +187,8 @@ async function deleteFile(env, filename) {
     )
       .bind(filename)
       .all();
-    if (r.results.length && r.results[0].token) {
+    if (r.results.length && r.results[0].token)
       items.push({ token: r.results[0].token, path: r.results[0].path });
-    }
     await env.DB.prepare("DELETE FROM files WHERE path = ?")
       .bind(filename)
       .run();
@@ -207,9 +204,8 @@ async function renameFile(env, oldName, newName) {
         .bind(newName)
         .all()
     ).results.length
-  ) {
+  )
     throw new Error("目标名称已存在");
-  }
   const isDir = isFolder(oldName);
   let tokens = [];
   if (isDir) {
@@ -248,20 +244,18 @@ async function renameFile(env, oldName, newName) {
 }
 async function moveItem(env, itemName, targetFolder) {
   let target = targetFolder.endsWith("/") ? targetFolder : targetFolder + "/";
-  if (isFolder(itemName) && target.startsWith(itemName)) {
+  if (isFolder(itemName) && target.startsWith(itemName))
     throw new Error("不能将文件夹移动到自身或其子文件夹中");
-  }
-  const base = getBaseName(itemName);
-  const newPath = target + base;
+  const base = getBaseName(itemName),
+    newPath = target + base;
   if (
     (
       await env.DB.prepare("SELECT path FROM files WHERE path = ?")
         .bind(newPath)
         .all()
     ).results.length
-  ) {
+  )
     throw new Error("目标位置已存在同名文件");
-  }
   return renameFile(env, itemName, newPath);
 }
 async function getFileToken(env, filename) {
@@ -318,7 +312,7 @@ async function createNewFolder(env, fullPath) {
 async function proxyFrontend(frontendUrl, request, ctx) {
   const cacheKey = new URL(frontendUrl);
   const cached = await caches.default.match(cacheKey);
-  if (cached) {
+  if (cached)
     return new Response(cached.body, {
       headers: {
         ...cached.headers,
@@ -326,7 +320,6 @@ async function proxyFrontend(frontendUrl, request, ctx) {
         "Content-Type": "text/html;charset=utf-8",
       },
     });
-  }
   const res = await fetch(frontendUrl, { cf: { cacheEverything: true } });
   const newRes = new Response(res.body, {
     status: res.status,
@@ -350,8 +343,6 @@ export default {
       try {
         const token = parts[1];
         const decodedPath = decodeURIComponent(parts.slice(2).join("/"));
-        const cached = await getCFCache(request, token, decodedPath);
-        if (cached) return cached;
         const kv = await getShareCache(env, token, decodedPath);
         if (kv !== null) {
           ctx.waitUntil(putCFCache(request, token, decodedPath, kv));
@@ -359,9 +350,8 @@ export default {
         }
         await initDB(env);
         const saved = await getFileToken(env, decodedPath);
-        if (!saved || token !== saved) {
+        if (!saved || token !== saved)
           return text("Token无效或文件不存在", 403);
-        }
         const content = await getFileContent(env, decodedPath);
         ctx.waitUntil(
           Promise.all([
@@ -374,9 +364,8 @@ export default {
         return text("访问失败：" + e.message, 400);
       }
     }
-    if (parts[0] === "sub") {
+    if (parts[0] === "sub")
       return text("格式错误：/sub/<Token>/<路径>/<文件名>", 400);
-    }
     await initDB(env);
     if (pathname === "admin" || pathname.startsWith("admin/")) {
       if (
@@ -391,28 +380,28 @@ export default {
       const body = request.method === "POST" ? await request.text() : "";
       if (body.startsWith("LOGIN|")) {
         const inp = body.split("|")[1];
-        if (inp === ADMIN_UUID) {
+        if (inp === ADMIN_UUID)
           return text("登录成功", 200, {
             "Set-Cookie": `admin_token=${ADMIN_UUID};Path=/;HttpOnly;SameSite=Lax;Secure;Max-Age=${ADMIN_COOKIE_MAX_AGE}`,
           });
-        }
         return text("UUID错误", 401);
       }
-      if (body.startsWith("LOGOUT")) {
+      if (body.startsWith("LOGOUT"))
         return text("已登出", 200, {
           "Set-Cookie": `admin_token=;Path=/;HttpOnly;SameSite=Lax;Secure;Max-Age=0`,
         });
-      }
       const adminToken = getCookie(request, "admin_token");
       if (adminToken !== ADMIN_UUID) return text("未登录", 401);
-      if (url.searchParams.get("action") === "get_tree") {
+      if (url.searchParams.get("action") === "get_tree")
         return json(await getFileList(env));
-      }
       if (body.startsWith("FILE_TOKEN|")) {
         const [_, filename, custom] = body.split("|");
         if (!filename) return text("缺少文件名", 400);
-        const finalToken = custom?.trim() || uuidv4();
-        const result = await saveFileToken(env, filename, finalToken);
+        const result = await saveFileToken(
+          env,
+          filename,
+          custom?.trim() || uuidv4(),
+        );
         if (result.oldToken && result.oldToken !== result.newToken) {
           ctx.waitUntil(purgeCFCache(request, result.oldToken, filename));
         }
@@ -436,9 +425,8 @@ export default {
                     .bind(full)
                     .all()
                 ).results.length
-              ) {
+              )
                 throw new Error("文件已存在");
-              }
               await createNewFile(env, full);
               return json({ success: true, path: full });
             }
@@ -453,9 +441,8 @@ export default {
                     .bind(full)
                     .all()
                 ).results.length
-              ) {
+              )
                 throw new Error("文件夹已存在");
-              }
               await createNewFolder(env, full);
               return json({ success: true, path: full });
             }
@@ -512,8 +499,7 @@ export default {
           ? decodeURIComponent(request.headers.get("X-File-Token"))
           : null;
         const used = await saveFileContent(env, filename, body, inlineToken);
-        if (used) {
-        }
+        if (used) ctx.waitUntil(putCFCache(request, used, filename, body));
         return text("保存成功");
       }
       if (url.searchParams.get("action") === "get_content") {
@@ -530,4 +516,3 @@ export default {
     return text("Not Found", 404);
   },
 };
-
